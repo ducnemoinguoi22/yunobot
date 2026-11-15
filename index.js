@@ -29,7 +29,10 @@ const toggles = {
   attackRight: false,
   skill1: false,
   skill2: false,
-  skill3: false
+  skill3: false,
+  congphap1: false,
+  congphap2: false,
+  congphap3: false
 };
 
 // Cấu hình tốc độ click chuột (tối thiểu 0.1s = 100ms)
@@ -188,9 +191,12 @@ app.get('/api/toggle/:feature', (req, res) => {
       if (feat === 'quylay') safeChat('/quylay');
       if (feat === 'dinhthan') safeChat('/dinhthan');
       if (feat === 'quanghao') safeChat('/quanghao');
-      if (feat === 'skill1') safeChat('/kinang_1');
-      if (feat === 'skill2') safeChat('/kinang_2');
-      if (feat === 'skill3') safeChat('/kinang_3');
+      if (feat === 'skill1' && toggles[feat]) safeChat('/kinang_1');
+      if (feat === 'skill2' && toggles[feat]) safeChat('/kinang_2');
+      if (feat === 'skill3' && toggles[feat]) safeChat('/kinang_3');
+      if (feat === 'congphap1' && toggles[feat]) safeChat('/fightingskill_1');
+      if (feat === 'congphap2' && toggles[feat]) safeChat('/fightingskill_2');
+      if (feat === 'congphap3' && toggles[feat]) safeChat('/fightingskill_3');
 
       restartLoops();
     }
@@ -471,6 +477,11 @@ app.get('/', (req, res) => {
               ${renderToggleBtn('skill2', 'Kỹ Năng 2')}
               ${renderToggleBtn('skill3', 'Kỹ Năng 3')}
             </div>
+            <div class="btn-group-responsive" style="margin-top: 10px;">
+              ${renderToggleBtn('congphap1', 'Công Pháp 1')}
+              ${renderToggleBtn('congphap2', 'Công Pháp 2')}
+              ${renderToggleBtn('congphap3', 'Công Pháp 3')}
+            </div>
           </div>
 
           <!-- CẤU HÌNH TÀI KHOẢN & PROXY -->
@@ -567,12 +578,15 @@ function restartLoops() {
       }
     }, attackRightIntervalMs);
   }
-  if (toggles.skill1 || toggles.skill2 || toggles.skill3) {
+  if (toggles.skill1 || toggles.skill2 || toggles.skill3 || toggles.congphap1 || toggles.congphap2 || toggles.congphap3) {
     skillLoopInterval = setInterval(() => {
-      if (bot && bot.entity && bot._client && !isManualStopped) {
+      if (bot && bot.entity && bot._client && bot._client.state === 'play' && !isManualStopped) {
         if (toggles.skill1) safeChat('/kinang_1');
         if (toggles.skill2) safeChat('/kinang_2');
         if (toggles.skill3) safeChat('/kinang_3');
+        if (toggles.congphap1) safeChat('/fightingskill_1');
+        if (toggles.congphap2) safeChat('/fightingskill_2');
+        if (toggles.congphap3) safeChat('/fightingskill_3');
       }
     }, 10000);
   }
