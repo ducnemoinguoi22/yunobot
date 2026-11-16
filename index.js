@@ -69,7 +69,8 @@ let quylayInterval = null;
 let ngoiInterval = null;
 let attackLeftInterval = null;
 let attackRightInterval = null;
-let skillLoopInterval = null;
+let skillLoopInterval = null; // Giữ tương thích nếu nơi khác còn tham chiếu
+let skillIntervals = {}; // Timer riêng cho từng skill, không dùng chung một chu kỳ
 let hotbarLoopInterval = null;
 
 let isAwaitingResponse = false;
@@ -544,6 +545,10 @@ function stopFeatureLoops() {
   if (attackLeftInterval) { clearInterval(attackLeftInterval); attackLeftInterval = null; }
   if (attackRightInterval) { clearInterval(attackRightInterval); attackRightInterval = null; }
   if (skillLoopInterval) { clearInterval(skillLoopInterval); skillLoopInterval = null; }
+  Object.keys(skillIntervals).forEach(key => {
+    if (skillIntervals[key]) clearInterval(skillIntervals[key]);
+    delete skillIntervals[key];
+  });
   if (hotbarLoopInterval) { clearInterval(hotbarLoopInterval); hotbarLoopInterval = null; }
 }
 
@@ -578,18 +583,24 @@ function restartLoops() {
       }
     }, attackRightIntervalMs);
   }
-  if (toggles.skill1 || toggles.skill2 || toggles.skill3 || toggles.congphap1 || toggles.congphap2 || toggles.congphap3) {
-    skillLoopInterval = setInterval(() => {
-      if (bot && bot.entity && bot._client && bot._client.state === 'play' && !isManualStopped) {
-        if (toggles.skill1) safeChat('/kinang_1');
-        if (toggles.skill2) safeChat('/kinang_2');
-        if (toggles.skill3) safeChat('/kinang_3');
-        if (toggles.congphap1) safeChat('/fightingskill_1');
-        if (toggles.congphap2) safeChat('/fightingskill_2');
-        if (toggles.congphap3) safeChat('/fightingskill_3');
+  // Mỗi kỹ năng có chu kỳ riêng theo thời gian hồi chiêu đã yêu cầu.
+  const skillSchedules = [
+    { key: 'skill1', command: '/kinang_1', intervalMs: 20 * 1000 },
+    { key: 'skill2', command: '/kinang_2', intervalMs: 35 * 1000 },
+    { key: 'skill3', command: '/kinang_3', intervalMs: 35 * 1000 },
+    { key: 'congphap1', command: '/fightingskill_1', intervalMs: 20 * 1000 },
+    { key: 'congphap2', command: '/fightingskill_2', intervalMs: 35 * 1000 },
+    { key: 'congphap3', command: '/fightingskill_3', intervalMs: 121 * 1000 }
+  ];
+
+  skillSchedules.forEach(({ key, command, intervalMs }) => {
+    if (!toggles[key]) return;
+    skillIntervals[key] = setInterval(() => {
+      if (toggles[key] && bot && bot.entity && bot._client && bot._client.state === 'play' && !isManualStopped) {
+        safeChat(command);
       }
-    }, 10000);
-  }
+    }, intervalMs);
+  });
 
   const activeSlots = hotbarEnabled.map((enabled, idx) => enabled ? idx : -1).filter(idx => idx !== -1);
   if (activeSlots.length === 1) {
@@ -685,6 +696,8 @@ function executeActiveFeaturesOnSpawn() {
 
 function createBot() {
   if (isManualStopped) return;
+  // Một kết nối mới bắt đầu; bỏ trạng thái khóa của lần reconnect trước.
+  isReconnecting = false;
   cleanupBot();
   isFirstSpawn = true;
   lastTimeAge = 0;
@@ -824,7 +837,12 @@ function createBot() {
       }, 5000);
 
       watchdogInterval = setInterval(() => {
-        if (!bot || isManualStopped) return;
+        if (isManualStopped) return;
+        if (!bot || !bot._client || bot._client.state !== 'play') {
+          addErrorLog('Watchdog', 'Phát hiện bot không còn ở trạng thái trong game. Đang kết nối lại...');
+          handleReconnect();
+          return;
+        }
         if (!isAutoActionRunning || Date.now() - lastActionTime > 20000) scheduleNextAction();
 
         if (bot.time) {
@@ -885,6 +903,8 @@ function createBot() {
   bot.on('error', (err) => {
     stopFeatureLoops();
     addErrorLog('Mineflayer Error', err.message || err.toString());
+    // Chỉ reconnect ngay khi socket đã đóng; lỗi đơn lẻ khi vẫn online chờ event end/watchdog.
+    if (!isManualStopped && (!bot || !bot._client || bot._client.state !== 'play')) handleReconnect();
   });
 
   bot.on('kicked', (reason) => {
